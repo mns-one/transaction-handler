@@ -1,27 +1,28 @@
 package com.mns.txmanager;
 
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-import com.mns.txmanager.storage.InMemoryStorageEngine;
-import com.mns.txmanager.storage.StorageEngine;
-import com.mns.txmanager.transaction.Transaction;
+import com.mns.txmanager.app.App;
 
 
-public class TxManagerApplication {
+@SpringBootApplication
+public class TxManagerApplication implements CommandLineRunner {
+
+	private final App app;
+
+	TxManagerApplication(App app) {
+		this.app = app;
+	}
 
 	public static void main(String[] args) {
-
-		Transaction tx = new Transaction();
-
-		tx.set("user", "john");
-
-		System.out.println(tx.get("user"));
-
-		tx.rollback();
-
-		System.out.println(tx.get("user"));
-
+		SpringApplication.run(TxManagerApplication.class, args);
 	}
+
+	@Override
+    public void run(String... args) {
+        app.start();
+    }
 
 }
