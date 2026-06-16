@@ -18,11 +18,15 @@ public class App {
 
     public void start() {
 
-        storage.set("user", "alice");
+        storage.set("user", "john");
 
-        tx.set("user", "john");
+        tx.delete("user");
 
-        System.out.println( tx.get("user") );
+        System.out.println( storage.get("user") ); // shows john
+
+        tx.commit();
+
+        System.out.println( storage.get("user") ); // shows null
 
     }
 
