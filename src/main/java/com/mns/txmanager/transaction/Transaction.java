@@ -5,27 +5,39 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.springframework.stereotype.Component;
-
+import com.mns.txmanager.lockManager.LockManager;
 import com.mns.txmanager.storage.StorageEngine;
 
 
-@Component
 public class Transaction {
 
     private final Map<String, String> pendingChanges = new HashMap<>();
     private final Set<String> deletedKeys = new HashSet<>();
     private final StorageEngine storage;
+    private final LockManager lockManager;
+    private final String txId;
 
-    Transaction( StorageEngine storage ){
+    public Transaction(StorageEngine storage, LockManager lockManager, String txId){
         this.storage = storage;
+        this.lockManager = lockManager;
+        this.txId = txId;
     }
 
+    // acquire lock before updating values
     public void set(String key, String value) {
+        try{
+            lockManager.acquireLock(key, txId);
+        }
+        catch (Exception e){
+            System.out.println(txId + " -> " + e.getMessage());
+            return;
+        }
+
         deletedKeys.remove(key);
         pendingChanges.put(key, value);
     }
 
+    // for fetching values, check transaction space first else main storage
     public String get(String key) {
         if(deletedKeys.contains(key)){
             return null;
@@ -36,16 +48,28 @@ public class Transaction {
         return storage.get(key);
     }
 
+    // track deleted keys seperately
     public void delete(String key) {
+        try{
+            lockManager.acquireLock(key, txId);
+        }
+        catch (Exception e){
+            System.out.println(txId + " -> " + e.getMessage());
+        }
+
         pendingChanges.remove(key);
         deletedKeys.add(key);
     }
 
+    // clear any tracked changes on rollback n release all locks
     public void rollback() {
         pendingChanges.clear();
         deletedKeys.clear();
+        lockManager.releaseLocks(txId);
     }
 
+    // apply tracked changes from both sets to main storage
+    // clear sets and release all locks
     public void commit() {
 
         for(String entry : deletedKeys){
@@ -57,6 +81,7 @@ public class Transaction {
         }
         pendingChanges.clear();
         deletedKeys.clear();
+        lockManager.releaseLocks(txId);
 
     }
 
