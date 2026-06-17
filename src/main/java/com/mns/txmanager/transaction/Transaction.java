@@ -1,5 +1,6 @@
 package com.mns.txmanager.transaction;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -7,6 +8,8 @@ import java.util.Set;
 
 import com.mns.txmanager.lockManager.LockManager;
 import com.mns.txmanager.storage.StorageEngine;
+import com.mns.txmanager.wal.LogEntry;
+import com.mns.txmanager.wal.WalManager;
 
 
 public class Transaction {
@@ -15,12 +18,14 @@ public class Transaction {
     private final Set<String> deletedKeys = new HashSet<>();
     private final StorageEngine storage;
     private final LockManager lockManager;
+    private final WalManager walManager;
     private final String txId;
 
-    public Transaction(StorageEngine storage, LockManager lockManager, String txId){
+    public Transaction(String txId, StorageEngine storage, LockManager lockManager, WalManager walManager){
         this.storage = storage;
         this.lockManager = lockManager;
         this.txId = txId;
+        this.walManager = walManager;
     }
 
     // acquire lock before updating values
@@ -70,8 +75,41 @@ public class Transaction {
 
     // apply tracked changes from both sets to main storage
     // clear sets and release all locks
-    public void commit() {
+    public void commit() throws IOException {
 
+        // first write all changes from deletedKeys n pendingChanges to walFile
+        for(String key : deletedKeys) {
+            walManager.append(
+                new LogEntry(
+                    txId,
+                    "DELETE",
+                    key,
+                    ""
+                )
+            );
+        }
+
+        for(Map.Entry<String,String> entry : pendingChanges.entrySet()) {
+            walManager.append(
+                new LogEntry(
+                    txId,
+                    "SET",
+                    entry.getKey(),
+                    entry.getValue()
+                )
+            );
+        }
+
+        walManager.append(
+            new LogEntry(
+                txId,
+                "COMMIT",
+                "",
+                ""
+            )
+        );
+
+        // after walFile is done, finally apply changes to storage
         for(String entry : deletedKeys){
             storage.delete(entry);
         }
@@ -79,6 +117,7 @@ public class Transaction {
         for(Map.Entry<String, String> entry : pendingChanges.entrySet()){
             storage.set(entry.getKey(), entry.getValue());
         }
+        
         pendingChanges.clear();
         deletedKeys.clear();
         lockManager.releaseLocks(txId);

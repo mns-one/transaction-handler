@@ -1,0 +1,3 @@
+TX1|SET|user|john
+TX1|COMMIT||
+TX2|SET|balance|500
